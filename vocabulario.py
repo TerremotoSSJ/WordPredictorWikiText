@@ -2,66 +2,117 @@ import pandas as pd
 import re
 from collections import Counter
 
-def clean_texts(texts):
-    """
-    Docstring for clean_texts
-    
-    :param texts: Input text batch to be cleaned
-    :return: Cleaned text batch
-    """
-    # Convert to lowercase
-    texts = texts.str.lower()
-    # Remove punctuation and special characters using regex
-    texts = texts.str.replace(r'[^\w\s]', '', regex=True) # Remove punctuation and special characters
-    texts = texts.str.strip() # Remove leading and trailing whitespace
-    texts = texts.replace('', '<UNK>') # Replace empty strings with a special token
-    return texts
+
+
 """
 We attempt to vectorize the text data in order to make it more efficient, however as the dataset is quite large
 we will not be able to vectorize the entire dataset, instead we will vectorize by batches 
 in order to avoid memory issues.
 """
-def build_vocabulary(dataframe, text_column='text'):
-    """
-    Docstring for build_vocabulary
     
-    :param dataframe: DataFrame containing the text data
-    :param text_column: Name of the column containing the text
-    :return: vocabularyToIndex, indexToVocabulary
-    """
-    additional=["UNK", "PAD"] # Add special tokens for padding and unknown words
-    word_counter = Counter()
-    for start_idx in range(0, len(dataframe), 1000): # Process the data in batches of 1,000 rows
-        end_idx = min(start_idx + 1000, len(dataframe))
-        batch = dataframe.iloc[start_idx:end_idx]
-        clean_batch = clean_texts(batch[text_column]) # Clean the text in the batch
-        all_words = clean_batch.str.split() # Split the cleaned text into individual words
-        for words in all_words:
-            word_counter.update(words) # Update the word frequency counter with the words from the batch
-    # Create a vocabulary dictionary mapping each word to a unique index, starting from 2 to reserve 0 and 1 for special tokens
-    vocabularyToIndex = {word: idx+2 for idx, (word, count) in enumerate(word_counter.most_common())} 
-    for i, token in enumerate(additional):
-        vocabularyToIndex[token] = i # Add special tokens to the vocabulary with reserved indices
-    # Create a reverse mapping from index to word (optional, but useful for decoding)
-    indexToVocabulary = {idx: word for word, idx in vocabularyToIndex.items()} # Create a reverse mapping from index to word
-    vocabulary_size = len(vocabularyToIndex) # Calculate the size of the vocabulary
-    print(f"Vocabulary size: {vocabulary_size}")
-    return vocabularyToIndex, indexToVocabulary # Return the vocabulary mappings
 
-def text_to_sequence(text, vocabularyToIndex):
-    """
-    Docstring for text_to_sequence
+class Vocabulary:
+    def __init__(self, dataframe=pd.read_parquet("data/train.parquet"), text_column='text'):
+        self._vocabularyToIndex, self._indexToVocabulary,self._length = self._build_vocabulary(dataframe, text_column)
     
-    :param text: Input text to be converted to a sequence of indices
-    :param vocabularyToIndex: Dictionary mapping words to their corresponding indices
-    :return: List of indices representing the input text
-    """
-    clean_text = clean_texts(pd.Series([text]))[0] # Clean the input text
-    words = clean_text.split() # Split the cleaned text into individual words
-    sequence = [vocabularyToIndex.get(word, vocabularyToIndex["UNK"]) for word in words] # Convert words to indices, using UNK for unknown words
-    return sequence # Return the list of indices representing the input text
+    @property
+    def vocabularyToIndex(self):
+        return self._vocabularyToIndex
+    
 
-vocabulary1, indexToVocabulary1 = build_vocabulary(pd.read_parquet("data/train.parquet"))
-print(f"Sample vocabulary entries: {list(vocabulary1.items())[:10]}")
-print(len(pd.read_parquet("data/train.parquet")))
-print(text_to_sequence("This is a sample text to be converted to a sequence of indices.", vocabulary1))
+    @property
+    def indexToVocabulary(self):
+        return self._indexToVocabulary
+    
+    def __len__(self):
+        return self._length
+    
+    @staticmethod 
+    def _clean_texts(texts):
+        """
+        Docstring for clean_texts
+    
+        :param texts: Input text batch to be cleaned
+        :return: Cleaned text batch type: pandas Series
+        """
+        # Convert to lowercase
+        texts = texts.str.lower()
+
+        # Remove punctuation and special characters using regex
+        texts = texts.str.replace(r'[^\w\s]', '', regex=True)
+
+        # Remove leading and trailing whitespace
+        texts = texts.str.strip() 
+
+        # Replace empty strings with a special token
+        texts = texts.replace('', '<UNK>') 
+
+        return texts
+    
+    def text_to_sequence(self, text):
+        """
+        Docstring for text_to_sequence
+    
+        :param text: Input text to be converted to a sequence of indices
+        :param vocabularyToIndex: Dictionary mapping words to their corresponding indices
+        :return: List of indices representing the input text
+        """
+
+        # Clean the input text
+        clean_text = Vocabulary._clean_texts(pd.Series([text]))[0] 
+
+        # Split the cleaned text into individual words
+        words = clean_text.split() 
+
+        # Convert words to indices, using UNK for unknown words
+        sequence = [self._vocabularyToIndex.get(word, self._vocabularyToIndex["UNK"]) for word in words] 
+
+        # Return the list of indices representing the input text
+        return sequence         
+    
+
+    def sequence_to_text(self, sequence):
+        return ' '.join([self._indexToVocabulary.get(idx, "UNK") for idx in sequence])
+    
+    @classmethod
+    def _build_vocabulary(cls,dataframe, text_column='text'):
+        """
+        Docstring for build_vocabulary
+    
+        :param dataframe: DataFrame containing the text data
+        :param text_column: Name of the column containing the text
+        :return: vocabularyToIndex, indexToVocabulary, vocabulary_size - dictionaries mapping words to indices and vice versa, and the size of the vocabulary
+        """
+        # Add special tokens for padding and unknown words
+        additional=["UNK", "PAD"] 
+        word_counter = Counter()
+
+        # Process the data in batches of 1,000 rows to manage memory usage
+        for start_idx in range(0, len(dataframe), 1000): 
+            end_idx = min(start_idx + 1000, len(dataframe))
+            batch = dataframe.iloc[start_idx:end_idx]
+
+            # Clean the text in the batch
+            clean_batch = cls._clean_texts(batch[text_column]) 
+
+            # Split the cleaned text into individual words
+            all_words = clean_batch.str.split() 
+            for words in all_words:
+                word_counter.update(words) # Update the word frequency counter with the words from the batch
+    
+        # Create a vocabulary dictionary mapping each word to a unique index, starting from 2 to reserve 0 and 1 for special tokens
+        vocabularyToIndex = {word: idx+2 for idx, (word, count) in enumerate(word_counter.most_common())} 
+
+        # Add special tokens to the vocabulary with reserved indices
+        for i, token in enumerate(additional):
+            vocabularyToIndex[token] = i 
+
+        # Create a reverse mapping from index to word (optional, but useful for decoding)
+        indexToVocabulary = {idx: word for word, idx in vocabularyToIndex.items()}
+
+        # Calculate the size of the vocabulary
+        vocabulary_size = len(vocabularyToIndex) 
+
+        # Return the vocabulary mappings
+        return vocabularyToIndex, indexToVocabulary,vocabulary_size
+    
