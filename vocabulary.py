@@ -12,8 +12,20 @@ in order to avoid memory issues.
     
 
 class Vocabulary:
-    def __init__(self, dataframe=pd.read_parquet("data/train.parquet"), text_column='text'):
+    def __init__(self, dataframe=None, text_column='text'):
+        if dataframe is None:
+            dataframe = pd.read_parquet("data/train.parquet")
         self._vocabularyToIndex, self._indexToVocabulary,self._length = self._build_vocabulary(dataframe, text_column)
+        self._unk_index = self._vocabularyToIndex["UNK"]
+        self._pad_index = self._vocabularyToIndex["PAD"]
+
+    @property 
+    def unk_index(self):
+        return self._unk_index
+    
+    @property
+    def pad_index(self):
+        return self._pad_index
     
     @property
     def vocabularyToIndex(self):
@@ -48,6 +60,20 @@ class Vocabulary:
         texts = texts.replace('', '<UNK>') 
 
         return texts
+    
+    def pad_sequence(self, sequence, max_length):
+        """
+        Docstring for pad_sequence
+    
+        :param sequence: Input sequence of word indices to be padded
+        :param max_length: Desired length of the output sequence after padding
+        :return: Padded sequence of word indices
+        """
+        # Pad the sequence with the index of the "PAD" token until it reaches the desired max_length
+        padded_sequence = sequence + [self._vocabularyToIndex["PAD"]] * (max_length - len(sequence)) 
+
+        # Truncate the sequence if it exceeds the max_length
+        return padded_sequence[:max_length]
     
     def text_to_sequence(self, text):
         """
