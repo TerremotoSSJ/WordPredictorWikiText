@@ -10,7 +10,7 @@ class NextWordPredictor(nn.Module):
     LSTM-based model for next word prediction in a sequence of text.
     """
 
-    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=4):
+    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=4,dropout=0.2):
         super(NextWordPredictor, self).__init__()
 
         #Embedding layer converts word indices into dense vectors of fixed size (embedding_dim).
@@ -19,11 +19,11 @@ class NextWordPredictor(nn.Module):
 
         #Dropout is added to prevent overfitting by randomly setting a fraction of the input units to 0 during training.
         #Batch_first=True ensures that the input and output tensors are of shape (batch_size, sequence_length, hidden_dim).
-        self.lstm=nn.LSTM(embedding_dim,hidden_dim,num_layers,batch_first=True,dropout=0.2) 
+        self.lstm=nn.LSTM(embedding_dim,hidden_dim,num_layers,batch_first=True,dropout=dropout if dropout > 0 else 0) 
         self.fc=nn.Linear(hidden_dim,len(vocabulary)) 
 
         #Dropout layer is added for regularization to prevent overfitting by randomly setting a fraction of the input units to 0 during training.
-        self.dropout=nn.Dropout(0.2)
+        self.dropout=nn.Dropout(dropout)
         
     
     def forward(self,x):

@@ -16,15 +16,22 @@ class TextLSTM:
         """
         padded_sequences = []
         for seq in sequences:
+
             if len(seq) < max_length:
+
                 padded_seq = seq + [pad_value] * (max_length - len(seq))
+
             else:
+
                 padded_seq = seq[:max_length]
+
             padded_sequences.append(padded_seq)
+
         return padded_sequences
     
     @staticmethod
     def split_article_into_sequences(article, vocabulary, min_sequence_length, max_sequence_length, step=1):
+        
         """
         Docstring for split_article_into_sequences
     
@@ -37,18 +44,24 @@ class TextLSTM:
          current_word_targets: List of sequences of word indices representing the current words in the article, where each sequence is of length between min_sequence_length and max_sequence_length.
          next_word_targets: List of word indices representing the next word in the article corresponding to each sequence in current_word_targets, where each index corresponds to the word that follows the last word in the
         """
+        
         article=aux.preprocess_article(article, vocabulary)
+        
         current_word_targets=[]
         next_word_targets=[]
         
-        #Sliding window approach
+        #We use window sliding to create sequences of words from the article, where each sequence is of length between min_sequence_length and max_sequence_length, and the next word target is the word that follows the last word in the sequence. The step parameter determines how much the window moves when creating new sequences from the article.
+        for i in range(0, len(article) - min_sequence_length, step):
+            
+            current_sequence = article[i:i + max_sequence_length]
 
+            #Too short sequences are discarded to ensure that the model is trained on meaningful sequences of words that provide enough context for predicting the next word. By setting a minimum sequence length, we can filter out sequences that may not contain enough information for the model to learn effectively, which can help improve the overall performance of the next word prediction task.
+            if len(current_sequence) < min_sequence_length:
+                break
 
-        for i in range(0, len(article) - min_sequence_length,step):
-            for j in range(i + min_sequence_length, min(i + max_sequence_length, len(article)-1) + 1, step):
-                current_word_targets.append(article[i:j])
-                next_word_targets.append(article[j+1])
-
+            current_word_targets.append(current_sequence[:-1])  # All words except the last one in the sequence
+            next_word_targets.append(current_sequence[-1])  # The last word in the sequence is the next word target
+        
         return current_word_targets, next_word_targets
 
 
@@ -69,6 +82,8 @@ class WordDataset(IterableDataset):
         self.minimum_sequence_length=minimum_sequence_length
         self.maximum_sequence_length=maximum_sequence_length
         self.step=step
+
+
     def __iter__(self):
         for article in self.articles_generator:
             current_word_targets, next_word_targets = TextLSTM.split_article_into_sequences(
@@ -78,6 +93,7 @@ class WordDataset(IterableDataset):
                 self.maximum_sequence_length,
                 self.step
             )
+
             for current, next in zip(current_word_targets, next_word_targets):
                 yield current, next
     
@@ -94,7 +110,9 @@ def collate_fn(vocabulary,batch):
         current_word_targets, next_word_targets = zip(*batch)
         max_length = max(len(seq) for seq in current_word_targets)
         lengths = [len(seq) for seq in current_word_targets]
+
         padded_current_word_targets = TextLSTM._pad_sequences(current_word_targets, max_length, vocabulary.pad_index)
+
         return torch.tensor(padded_current_word_targets), torch.tensor(next_word_targets),torch.tensor(lengths)
 
 

@@ -13,7 +13,6 @@ def build_articles_chunk(chunk,chunksize,text_column='text'):
     :return: A pandas DataFrame containing the articles and the last article in the chunk, which may be incomplete and will be used as a title for the next chunk to ensure that articles are not split across chunks.
     If "" is returned as the second element, it indicates that the last article in the chunk is complete and does not need to be carried over to the next chunk.
     """
-
     #Vectorized text cleaning using pandas string methods for efficiency
     texts=chunk["text"].astype(str).str.strip()
     
