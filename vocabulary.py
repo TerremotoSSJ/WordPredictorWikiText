@@ -13,8 +13,11 @@ in order to avoid memory issues.
 
 class Vocabulary:
     def __init__(self, dataframe=None, text_column='text'):
+        
         if dataframe is None:
             dataframe = pd.read_parquet("data/train.parquet")
+        else:
+            dataframe = pd.read_parquet(dataframe)
         self._vocabularyToIndex, self._indexToVocabulary,self._length = self._build_vocabulary(dataframe, text_column)
         self._unk_index = self._vocabularyToIndex["UNK"]
         self._pad_index = self._vocabularyToIndex["PAD"]
@@ -141,4 +144,5 @@ class Vocabulary:
 
         # Return the vocabulary mappings
         return vocabularyToIndex, indexToVocabulary,vocabulary_size
+    
     

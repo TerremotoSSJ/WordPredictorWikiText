@@ -1,5 +1,5 @@
 
-from vocabulario import Vocabulary
+from vocabulary import Vocabulary
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,11 +10,12 @@ class NextWordPredictor(nn.Module):
     LSTM-based model for next word prediction in a sequence of text.
     """
 
-    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=2):
+    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=4):
         super(NextWordPredictor, self).__init__()
 
         #Embedding layer converts word indices into dense vectors of fixed size (embedding_dim).
-        self.embedding = nn.Embedding(len(vocabulary), embedding_dim)
+        #padding_idx is set to the index of the padding token in the vocabulary, which allows the model to ignore the padded values during training and inference.
+        self.embedding = nn.Embedding(len(vocabulary), embedding_dim, padding_idx=vocabulary.pad_index)
 
         #Dropout is added to prevent overfitting by randomly setting a fraction of the input units to 0 during training.
         #Batch_first=True ensures that the input and output tensors are of shape (batch_size, sequence_length, hidden_dim).
@@ -30,6 +31,7 @@ class NextWordPredictor(nn.Module):
         Forward pass of the model.
 
         :param x: Input tensor of shape (batch_size, sequence_length) containing word indices.
+        :param lengths: List of actual lengths of each sequence in the batch.
         :return: Output tensor of shape (batch_size, vocab_size) containing the predicted probabilities for the next word.
         """
         # Pass input through embedding layer
@@ -37,25 +39,14 @@ class NextWordPredictor(nn.Module):
 
         #ignore the second output of the LSTM layer which contains the hidden and cell states
         lstm_out, _ = self.lstm(embedded) 
+        lstm_out=lstm_out[:, -1, :]
 
         # Apply dropout to the output of the LSTM layer
         lstm_out = self.dropout(lstm_out) 
 
         # Take the output of the last time step and pass it through the fully connected layer
-        output = self.fc(lstm_out[:, -1, :]) 
+        logits = self.fc(lstm_out) 
 
-        return output
+        return logits
     
-newVocablary = Vocabulary()
-text = "This is a sample text for testing the next word predictor."
-text2= "Another example to test the model's ability to predict the next word."
-sequence = newVocablary.text_to_sequence(text)
-sequence2 = newVocablary.text_to_sequence(text2)
-sequence1=newVocablary.pad_sequence(sequence, max_length=10)  # Pad the first sequence to a maximum length of 10
-sequence2=newVocablary.pad_sequence(sequence2, max_length=10)  # Pad the second sequence to a maximum length of 10
-print(sequence1)
-test=NextWordPredictor(newVocablary, embedding_dim=50, hidden_dim=100)
-input_tensor = torch.tensor([sequence1], dtype=torch.long)  # Convert sequence to tensor and
-bothsequences= torch.tensor([sequence1, sequence2], dtype=torch.long)  # Convert both sequences to tensor
-output = test(bothsequences)  # Pass both sequences through the model
-print(output)
+

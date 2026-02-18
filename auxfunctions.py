@@ -1,11 +1,13 @@
 import pandas as pd
-from vocabulario import Vocabulary
+from vocabulary import Vocabulary
+import pyarrow.parquet as pq
 
 
 def build_articles_chunk(chunk,chunksize,text_column='text'):
     """
     Docstring for build_articles_dataframe
 
+    :param chunk: A pandas DataFrame containing a chunk of the parquet file, which is processed to build the articles and get the last article, which may be incomplete and will be used as a title for the next chunk to ensure that articles are not split across chunks and maintain the integrity of the data.
     :param chunksize: Number of rows to read at a time from the parquet file
     :param text_column: Name of the column containing the text data
     :return: A pandas DataFrame containing the articles and the last article in the chunk, which may be incomplete and will be used as a title for the next chunk to ensure that articles are not split across chunks.
@@ -14,8 +16,10 @@ def build_articles_chunk(chunk,chunksize,text_column='text'):
 
     #Vectorized text cleaning using pandas string methods for efficiency
     texts=chunk["text"].astype(str).str.strip()
+    
     #Identify titles based on the pattern of starting and ending with "=" return a boolean Series where True indicates a title and False indicates regular text
     is_title = texts.str.startswith("=") & texts.str.endswith("=") & (texts.str.count("=") == 2)
+
     #Use the cumulative sum of the boolean Series to assign a unique article ID to each group of text, effectively grouping the text into articles based on the identified titles
     chunk=chunk.copy()  # Create a copy of the chunk to avoid modifying the original DataFrame
     chunk["id_article"] = is_title.cumsum()
@@ -38,10 +42,11 @@ def build_articles_chunk(chunk,chunksize,text_column='text'):
 
     return articles,last_article_incomplete
 
-def build_articles_dataframe(chunksize=10000,text_column='text'):
+def build_articles_dataframe(route,chunksize=10000,text_column='text'):
     """
     Docstring for build_articles_dataframe
     
+    :param route: Path to the parquet file containing the articles, which is read in chunks to efficiently process large datasets without loading the entire file into memory at once. The function uses a generator to yield articles one by one, allowing for memory-efficient processing of the articles while maintaining the integrity of the data by ensuring that articles are not split across chunks.
     :param chunksize: Number of rows to read at a time from the parquet file
     :param text_column: Name of the column containing the text data
     :yield: A generator that yields articles one by one from the parquet file, allowing for memory-efficient processing of the articles without 
@@ -52,8 +57,10 @@ def build_articles_dataframe(chunksize=10000,text_column='text'):
 
     # Buffer to hold the incomplete last article from the previous chunk
     incomplete_buffer = ""  
+    parquet_file = pq.ParquetFile(route)
 
-    for chunk in pd.read_parquet("data/train.parquet", chunksize=chunksize):
+    for chunk in parquet_file.iter_batches(batch_size=chunksize):
+        chunk = chunk.to_pandas()  # Convert the chunk to a pandas DataFrame for processing
 
         #Preprocess the chunk to build the articles and get the last article, which may be incomplete and will be used as a title for the next 
         # chunk to ensure that articles are not split across chunks and maintain the integrity of the data
@@ -107,3 +114,4 @@ def preprocess_articles(articles,vocabulary: Vocabulary)->list[list[int]]:
     """
 
     return [preprocess_article(article,vocabulary) for article in articles]
+
