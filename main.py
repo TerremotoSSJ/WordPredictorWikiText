@@ -14,7 +14,7 @@ test_route="data/test.parquet"
 train_route="data/train.parquet"
 validation_route="data/validation.parquet"
 
-#Metadata
+#Hyperparameters:
 sequence_length=128
 embedding_dim=400
 hidden_dim=1024
@@ -22,7 +22,7 @@ num_layers=3
 dropout=0.4
 batch_size=64
 num_epochs=100
-learning_rate=0.0005
+learning_rate=0.001
 
 #Datasets and dataloaders:
 vocabulary=Vocabulary(dataframe=train_route)

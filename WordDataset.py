@@ -56,7 +56,7 @@ class TextLSTM:
         """
         for i in range(0, len(article) - sequence_length, step):
             current_seq = article[i:i + sequence_length]
-            next_word = article[i+1:sequence_length+1]
+            next_word = article[i+1:i+sequence_length+1]
 
             current_word_targets.append(current_seq)
             next_word_targets.append(next_word)
@@ -81,16 +81,17 @@ class WordDataset(IterableDataset):
 
 
     def __iter__(self):
-        for article in self.articles_generator:
-            current_word_targets, next_word_targets = TextLSTM.split_article_into_sequences(
-                article,
-                self.vocabulary,
-                self.sequence_length,
-                self.step
-            )
-
-            for current, next in zip(current_word_targets, next_word_targets):
-                yield current, next
+        worker_info=torch.utils.data.get_worker_info()
+        if worker_info is None:
+            iterator=self.articles_generator
+        else:
+            worker_id=worker_info.id
+            num_workers=worker_info.num_workers
+            iterator=aux.split_generator(self.articles_generator,num_workers,worker_id)
+        for article in iterator:
+            current_word_targets, next_word_targets = TextLSTM.split_article_into_sequences(article, self.vocabulary,self.sequence_length,self.step)
+            for current_seq, next_word in zip(current_word_targets, next_word_targets):
+                yield current_seq, next_word
     
 def collate_fn(vocabulary,batch):
         """

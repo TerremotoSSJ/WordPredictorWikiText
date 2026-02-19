@@ -114,3 +114,16 @@ def preprocess_articles(articles,vocabulary: Vocabulary)->list[list[int]]:
 
     return [preprocess_article(article,vocabulary) for article in articles]
 
+def split_generator(generator, num_splits, split_id):
+    """
+    Docstring for split_generator
+
+    :param generator: Input generator to be split into multiple sub-generators
+    :param num_splits: Total number of splits to divide the generator into
+    :param split_id: ID of the current split (0-based index) to determine which subset of the generator to yield
+    :yield: A sub-generator that yields elements from the input generator corresponding to the specified split ID, allowing for parallel processing or distributed computing by dividing the workload into smaller chunks. Each sub-generator will yield a portion of the elements from the original generator based on the total number of splits and the specified split ID.
+    """
+
+    for i, item in enumerate(generator):
+        if i % num_splits == split_id:
+            yield item
