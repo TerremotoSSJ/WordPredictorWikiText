@@ -33,24 +33,29 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
 
         #The dataset is a streaming iterable dataset so we can not use len(train_dataloader) to compute the average loss, instead we keep track of the number of batches processed and divide the total loss by that number at the end of the epoch to get the average loss per batch.
         num_batches=0
-        for batch_idx, (current_word_targets, next_word_targets, lengths) in enumerate(train_dataloader):
+        for batch_idx, (current_word_targets, next_word_targets, lengths_current,lengths_next) in enumerate(train_dataloader):
             current_word_targets=current_word_targets.to(device)
             next_word_targets=next_word_targets.to(device)
 
             optimizer.zero_grad()
             outputs=model(current_word_targets)
-            loss=criterion(outputs, next_word_targets)
+            loss = criterion(
+                outputs.permute(0, 2, 1),
+                next_word_targets         
+)
             loss.backward()
 
             #Gradient clipping is a technique used to prevent the exploding gradient problem during training, where the gradients can become excessively large and cause instability in the training process. By setting a maximum norm for the gradients, we can ensure that they do not exceed a certain threshold, which helps maintain stable training and prevents the model from diverging.
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"NaN/Inf detected at batch {batch_idx}, skipping")
+                optimizer.zero_grad()
+                continue
             optimizer.step()
 
             total_loss+=loss.item()
             num_batches += 1
-            if batch_idx % 100 == 0:
-                print(f"Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}")
+            print(f"Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}")
                 
         
         avg_train_loss=total_loss/num_batches if num_batches > 0 else 0
@@ -61,16 +66,15 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
         total_val_loss=0
         num_val_batches=0
         with torch.no_grad():
-            for current_word_targets, next_word_targets, lengths in validation_dataloader:
+            for current_word_targets, next_word_targets, lengths_current,lengths_next in validation_dataloader:
                 current_word_targets=current_word_targets.to(device)
                 next_word_targets=next_word_targets.to(device)
 
                 outputs=model(current_word_targets)
-                val_loss=criterion(outputs, next_word_targets)
+                val_loss=criterion(outputs.permute(0, 2, 1), next_word_targets)
                 num_val_batches += 1
                 total_val_loss+=val_loss.item()
-                if num_val_batches % 50 == 0:
-                    print(f"Epoch {epoch+1}, Validation Batch {num_val_batches}, Loss: {val_loss.item():.4f}")
+                print(f"Epoch {epoch+1}, Validation Batch {num_val_batches}, Loss: {val_loss.item():.4f}")
         
         avg_val_loss=total_val_loss/num_val_batches if num_val_batches > 0 else 0
         print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss:.4f}")

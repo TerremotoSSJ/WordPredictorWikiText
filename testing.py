@@ -19,12 +19,12 @@ def testing_model(model, test_dataloader, criterion,device=None):
     total_test_loss = 0
     num_test_batches = 0
     with torch.no_grad():
-        for current_word_targets, next_word_targets, lengths in test_dataloader:
+        for current_word_targets, next_word_targets, lengths_current,lengths_next in test_dataloader:
             current_word_targets = current_word_targets.to(device)
             next_word_targets = next_word_targets.to(device)
 
             outputs = model(current_word_targets)
-            test_loss = criterion(outputs, next_word_targets)
+            test_loss = criterion(outputs.permute(0, 2, 1), next_word_targets)
             total_test_loss += test_loss.item()
             num_test_batches += 1
             print(f"Test Batch {num_test_batches}, Loss: {test_loss.item():.4f}")

@@ -29,22 +29,21 @@ class NextWordPredictor(nn.Module):
     def forward(self,x):
         """
         Forward pass of the model.
-
-        :param x: Input tensor of shape (batch_size, sequence_length) containing word indices.
-        :param lengths: List of actual lengths of each sequence in the batch.
-        :return: Output tensor of shape (batch_size, vocab_size) containing the predicted probabilities for the next word.
+        :param x: Input tensor of shape (batch_size, sequence_length) containing word indices representing the current words in the articles.
+        :return: Output tensor of shape (batch_size, sequence_length, vocabulary_size) containing the predicted probabilities for the next word in the sequence for each position in the input sequence.
         """
         # Pass input through embedding layer
         embedded = self.embedding(x) 
 
-        #ignore the second output of the LSTM layer which contains the hidden and cell states
+        #ignore the second output of the LSTM layer which contains the hidden and cell 
+        #(batch_size, sequence_length, hidden_dim)
         lstm_out, _ = self.lstm(embedded) 
-        lstm_out=lstm_out[:, -1, :]
 
         # Apply dropout to the output of the LSTM layer
         lstm_out = self.dropout(lstm_out) 
 
         # Take the output of the last time step and pass it through the fully connected layer
+        #(batch_size, sequence_length, vocabulary_size)
         logits = self.fc(lstm_out) 
 
         return logits
