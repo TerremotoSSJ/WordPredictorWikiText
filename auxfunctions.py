@@ -102,7 +102,7 @@ def preprocess_article(article,vocabulary: Vocabulary)->list[int]:
     if not article:
         article = [vocabulary.unk_index]
 
-    return article
+    return [vocabulary.bos_index] + article + [vocabulary.eos_index]
 
 def preprocess_articles(articles,vocabulary: Vocabulary)->list[list[int]]:
     """

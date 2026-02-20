@@ -10,7 +10,7 @@ class NextWordPredictor(nn.Module):
     LSTM-based model for next word prediction in a sequence of text.
     """
 
-    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=4,dropout=0.2):
+    def __init__(self, vocabulary, embedding_dim, hidden_dim, num_layers=4,dropout=0.2,sequence_length=128):
         super(NextWordPredictor, self).__init__()
 
         #Embedding layer converts word indices into dense vectors of fixed size (embedding_dim).
@@ -24,7 +24,10 @@ class NextWordPredictor(nn.Module):
 
         #Dropout layer is added for regularization to prevent overfitting by randomly setting a fraction of the input units to 0 during training.
         self.dropout=nn.Dropout(dropout)
-        
+
+        self.vocabulary=vocabulary
+        self.device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.length=sequence_length
     
     def forward(self,x):
         """
@@ -47,5 +50,32 @@ class NextWordPredictor(nn.Module):
         logits = self.fc(lstm_out) 
 
         return logits
-    
+    def generate(self,prompt,max_length=128):
+        """
+        :param prompt: Input string to be used as the initial context for generating the next word in the sequence.
+        :param max_length: Maximum length of the generated sequence, which determines how many words will be generated after the initial prompt.
+        :return: Generated sequence of text, which includes the initial prompt followed by the predicted next words up to the specified maximum length.
+        """
 
+        sequence=self.vocabulary.text_to_sequence(prompt)
+
+        #Add BOS token
+        sequence=[self.vocabulary.bos_index]+sequence
+
+        self.eval()
+        with torch.no_grad():
+            for _ in range(max_length):
+                if(len(sequence)>self.length):
+                    input_window=sequence[-self.length:]
+                else:
+                    input_window=sequence 
+                input_seq=torch.tensor([input_window]).to(self.device)
+                logits=self.forward(input_window) 
+
+                #Get the predicted next word by taking the argmax of the output logits for the last time step
+                next_word_logits=logits[0, -1, :] 
+                next_word_index=torch.argmax(next_word_logits).item() 
+                if next_word_index==self.vocabulary.eos_index:
+                    break
+                sequence.append(next_word_index)
+        return self.vocabulary.sequence_to_text(sequence)

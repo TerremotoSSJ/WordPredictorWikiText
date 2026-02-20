@@ -19,13 +19,23 @@ class Vocabulary:
         else:
             dataframe = pd.read_parquet(dataframe)
         self._vocabularyToIndex, self._indexToVocabulary,self._length = self._build_vocabulary(dataframe, text_column)
-        self._unk_index = self._vocabularyToIndex["UNK"]
-        self._pad_index = self._vocabularyToIndex["PAD"]
+        self._unk_index = self._vocabularyToIndex["<UNK>"]
+        self._pad_index = self._vocabularyToIndex["<PAD>"]
+        self._bos_index = self._vocabularyToIndex["<BOS>"]
+        self._eos_index = self._vocabularyToIndex["<EOS>"]
+
 
     @property 
     def unk_index(self):
         return self._unk_index
     
+    @property
+    def bos_index(self):
+        return self._bos_index
+    
+    @property
+    def eos_index(self):
+        return self._eos_index
     @property
     def pad_index(self):
         return self._pad_index
@@ -73,7 +83,7 @@ class Vocabulary:
         :return: Padded sequence of word indices
         """
         # Pad the sequence with the index of the "PAD" token until it reaches the desired max_length
-        padded_sequence = sequence + [self._vocabularyToIndex["PAD"]] * (max_length - len(sequence)) 
+        padded_sequence = sequence + [self._vocabularyToIndex["<PAD>"]] * (max_length - len(sequence)) 
 
         # Truncate the sequence if it exceeds the max_length
         return padded_sequence[:max_length]
@@ -94,14 +104,14 @@ class Vocabulary:
         words = clean_text.split() 
 
         # Convert words to indices, using UNK for unknown words
-        sequence = [self._vocabularyToIndex.get(word, self._vocabularyToIndex["UNK"]) for word in words] 
+        sequence = [self._vocabularyToIndex.get(word, self._vocabularyToIndex["<UNK>"]) for word in words] 
 
         # Return the list of indices representing the input text
         return sequence         
     
 
     def sequence_to_text(self, sequence):
-        return ' '.join([self._indexToVocabulary.get(idx, "UNK") for idx in sequence])
+        return ' '.join([self._indexToVocabulary.get(idx, "<UNK>") for idx in sequence])
     
     @classmethod
     def _build_vocabulary(cls,dataframe, text_column='text'):
@@ -113,7 +123,7 @@ class Vocabulary:
         :return: vocabularyToIndex, indexToVocabulary, vocabulary_size - dictionaries mapping words to indices and vice versa, and the size of the vocabulary
         """
         # Add special tokens for padding and unknown words
-        additional=["UNK", "PAD"] 
+        additional=["<UNK>", "<PAD>","<BOS>","<EOS>"] 
         word_counter = Counter()
 
         # Process the data in batches of 1,000 rows to manage memory usage
