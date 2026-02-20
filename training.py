@@ -46,7 +46,7 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
             loss.backward()
 
             #Gradient clipping is a technique used to prevent the exploding gradient problem during training, where the gradients can become excessively large and cause instability in the training process. By setting a maximum norm for the gradients, we can ensure that they do not exceed a certain threshold, which helps maintain stable training and prevents the model from diverging.
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"NaN/Inf detected at batch {batch_idx}, skipping")
                 optimizer.zero_grad()
@@ -80,7 +80,22 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
         print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss:.4f}")
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), "best_model.pth")
+            #Save the best model checkpoint 
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'vocabulary': model.vocabulary,  
+                'best_val_loss': best_val_loss,
+                'config': {
+                    'embedding_dim': model.embedding.embedding_dim,
+                    'hidden_dim': model.lstm.hidden_size,
+                    'num_layers': model.lstm.num_layers,
+                    'dropout': model.dropout.p,
+                    'sequence_length': model.sequence_length
+                }
+            }
+            torch.save(checkpoint, "best_model.pth")
         else:
             not_improving_epochs += 1
             if not_improving_epochs >= 3:

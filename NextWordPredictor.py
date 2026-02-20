@@ -27,7 +27,7 @@ class NextWordPredictor(nn.Module):
 
         self.vocabulary=vocabulary
         self.device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        self.length=sequence_length
+        self.sequence_length=sequence_length
     
     def forward(self,x):
         """
