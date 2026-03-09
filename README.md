@@ -1,15 +1,16 @@
 # WordPredictorWikiText
 
-Next word LSTM word predictor using WikiText-2 and Pytorch
+Next word transformer word predictor using WikiText-2 and Pytorch
 
 ### Model Info:
-- 3-layer LSTM model
-- Training using BPTT (Backpropagation through time)
+- 6-layer Transformer Model
+- Causal Mask and Attention Mask
 - Using sharding for multiple workers in IterableDataset
 - <PAD> <UNK> <EOS> <BOS> tokens usage
 - Gradient Clipping
 - Early Stopping
 - Temperature
+- Top k sampling
 - Generating predicted next words given an input prompt
 - Saving Checkpoints 
 
@@ -32,16 +33,30 @@ python main.py
 import torch
 from NextWordPredictor import NextWordPredictor
 
-checkpoint = torch.load('best_model.pth', map_location='cpu', weights_only=False)
+best_model_checkpoint = torch.load('best_model.pth', weights_only=False)
+
+vocabulary = best_model_checkpoint['vocabulary']
+embedding_dim = best_model_checkpoint['config']['embedding_dim']
+hidden_dim = best_model_checkpoint['config']['hidden_dim']
+num_layers = best_model_checkpoint['config']['num_layers']
+dropout = best_model_checkpoint['config']['dropout']
+sequence_length = best_model_checkpoint['config']['sequence_length']
+nhead = best_model_checkpoint['config']['nhead']
+
+# Transformer
+from NextWordPredictor import NextWordPredictor
 model = NextWordPredictor(
-    vocabulary=checkpoint['vocabulary'],
-    embedding_dim=checkpoint['config']['embedding_dim'],
-    hidden_dim=checkpoint['config']['hidden_dim'],
-    num_layers=checkpoint['config']['num_layers'],
-    dropout=checkpoint['config']['dropout']
+    vocabulary=vocabulary,
+    embedding_dim=embedding_dim,
+    hidden_dim=hidden_dim,
+    num_layers=num_layers,
+    dropout=dropout,
+    sequence_length=sequence_length,
+    nhead=nhead
 )
-model.load_state_dict(checkpoint['model_state_dict'])
-model.eval()
+
+# Weight load
+model.load_state_dict(best_model_checkpoint['model_state_dict'])
 
 prompt = "Input prompt"
 generated = model.generate(prompt, max_length=50)
@@ -50,19 +65,21 @@ print(generated)
 
 ## Hyperparameters (default)
 
-embedding_dim=400
-hidden_dim=1024
-num_layers=3
-dropout=0.4
-sequence_length=128
-batch_size=64
+sequence_length=256
+embedding_dim=256
+hidden_dim=512
+num_layers=6
+dropout=0.2
+batch_size=16
+num_epochs=100
 learning_rate=0.001
-max_norm=1
+nhead=4
+chunksize=1000
 
 ## Proyect structure
 
 ```
-├── NextWordPredictor.py      # LSTM Model
+├── NextWordPredictor.py      # Transformer Model
 ├── WordDataset.py            # Dataset and collate_fn
 ├── vocabulary.py             # Special tokens and Vocabulary
 ├── auxfunctions.py           # Preprocessing data
