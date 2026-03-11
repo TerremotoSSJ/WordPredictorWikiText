@@ -14,7 +14,7 @@ def build_articles_chunk(chunk,chunksize,text_column='text'):
     If "" is returned as the second element, it indicates that the last article in the chunk is complete and does not need to be carried over to the next chunk.
     """
     #Vectorized text cleaning using pandas string methods for efficiency
-    texts=chunk["text"].astype(str).str.strip()
+    texts=chunk[text_column].astype(str).str.strip()
     
     #Identify titles based on the pattern of starting and ending with "=" return a boolean Series where True indicates a title and False indicates regular text
     is_title = texts.str.startswith("=") & texts.str.endswith("=") & (texts.str.count("=") == 2)

@@ -2,10 +2,9 @@ import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Cargar checkpoint
+# Checkpoint load
 best_model_checkpoint = torch.load('best_model.pth', weights_only=False)
 
-# Extraer configuración
 vocabulary = best_model_checkpoint['vocabulary']
 embedding_dim = best_model_checkpoint['config']['embedding_dim']
 hidden_dim = best_model_checkpoint['config']['hidden_dim']
@@ -14,7 +13,7 @@ dropout = best_model_checkpoint['config']['dropout']
 sequence_length = best_model_checkpoint['config']['sequence_length']
 nhead = best_model_checkpoint['config']['nhead']
 
-# Crear modelo TRANSFORMER con TODOS los parámetros
+# Transformer
 from NextWordPredictor import NextWordPredictor
 model = NextWordPredictor(
     vocabulary=vocabulary,
@@ -26,13 +25,15 @@ model = NextWordPredictor(
     nhead=nhead
 )
 
-# Cargar pesos
+# Weight load
 model.load_state_dict(best_model_checkpoint['model_state_dict'])
 model = model.to(device)
 model.eval()
 
-# Generar texto
-prompt = "The experiment was a "
-generated_text = model.generate(prompt, max_length=50, temperature=0.8, topk=50)
+# Generate text based on a prompt
+prompt = "As with previous Valkyira Chronicles games"
+# Convert the prompt to lowercase to match the training data preprocessing, which can help improve the model's ability to generate coherent text based on the learned patterns from the training data.
+prompt = prompt.lower()  
+generated_text = model.generate(prompt, max_length=80, temperature=0.8, topk=50, repetition_penalty=1.2)
 print(f"Prompt: {prompt}")
 print(f"Generated: {generated_text}")

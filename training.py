@@ -1,4 +1,3 @@
-from pyexpat import model
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -43,13 +42,13 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
                 outputs.permute(0, 2, 1),
                 next_word_targets         
 )
-            loss.backward()
-            #Gradient clipping is a technique used to prevent the exploding gradient problem during training, where the gradients can become excessively large and cause instability in the training process. By setting a maximum norm for the gradients, we can ensure that they do not exceed a certain threshold, which helps maintain stable training and prevents the model from diverging.
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"NaN/Inf detected at batch {batch_idx}, skipping")
                 optimizer.zero_grad()
                 continue
+            loss.backward()
+            #Gradient clipping is a technique used to prevent the exploding gradient problem during training, where the gradients can become excessively large and cause instability in the training process. By setting a maximum norm for the gradients, we can ensure that they do not exceed a certain threshold, which helps maintain stable training and prevents the model from diverging.
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             total_loss+=loss.item()
@@ -82,6 +81,7 @@ def training_model(model, train_dataloader, validation_dataloader, criterion, op
         print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss:.4f}")
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+            not_improving_epochs = 0
             #Save the best model checkpoint 
             checkpoint = {
             'epoch': epoch,

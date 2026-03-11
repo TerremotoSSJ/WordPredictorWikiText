@@ -53,12 +53,21 @@ class WordDataset(IterableDataset):
        yield a tuple containing the current word targets, next word targets, attention mask in the dataset. The function processes the articles in a streaming fashion, allowing for memory-efficient handling of large datasets. It uses the vocabulary to preprocess the articles and generates sequences of word indices for training a language model.
         """
         worker_info=torch.utils.data.get_worker_info()
+
+        # Recreate a fresh source iterator every time __iter__ is called.
+        if callable(self.articles_generator):
+            base_iterator = self.articles_generator()
+        elif isinstance(self.articles_generator, str):
+            base_iterator = aux.build_articles_dataframe(self.articles_generator, chunksize=self.chunksize)
+        else:
+            base_iterator = iter(self.articles_generator)
+
         if worker_info is None:
-            iterator=self.articles_generator
+            iterator=base_iterator
         else:
             worker_id=worker_info.id
             num_workers=worker_info.num_workers
-            iterator=aux.split_generator(self.articles_generator,num_workers,worker_id)
+            iterator=aux.split_generator(base_iterator,num_workers,worker_id)
         for article in iterator:
             index=aux.preprocess_article(article,self.vocabulary)
             #Stride of sequence_length//2 to generate overlapping sequences in order to learn better dependencies between words

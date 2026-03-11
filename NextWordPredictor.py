@@ -1,7 +1,5 @@
 
-from multiprocessing import context
-
-from sympy import sequence
+import math
 
 from vocabulary import Vocabulary
 import torch
@@ -24,8 +22,8 @@ class NextWordPredictor(nn.Module):
         self.nhead=nhead
         self.embedding_dim=embedding_dim
         #Multi-layer Transformer
-        self.transformer_layer = nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout,batch_first=True,activation='relu')
-        self.transformer = nn.TransformerEncoder(self.transformer_layer, num_layers=num_layers)
+        self.transformer_layer = nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout,batch_first=True,activation='relu',norm_first=True)
+        self.transformer = nn.TransformerEncoder(self.transformer_layer, num_layers=num_layers, enable_nested_tensor=False)
         self.dropout = nn.Dropout(dropout)
         #output layer 
         self.fc = nn.Linear(embedding_dim, len(vocabulary)) 
@@ -43,26 +41,26 @@ class NextWordPredictor(nn.Module):
         :return: Output tensor of shape (batch_size, sequence_length, vocabulary_size) containing the predicted probabilities for the next word in the sequence for each position in the input sequence.
         """
         # Pass input through embedding layer
-        embedded = self.embedding(x) 
+        embedded = self.embedding(x)* math.sqrt(self.embedding_dim)  
         transformer_input=embedded+self.positional_encoding[:, :embedded.size(1), :]
         src_attention_mask=None
-        #attention mask
+        #padding mask
         if attention_mask is not None:
             src_attention_mask=(attention_mask==0)
         
         #causal mask to prevent the model from attending to future positions in the sequence, which ensures that the prediction for the next word at each position is based only on the current and previous words in the sequence, thus maintaining the autoregressive nature of the language model.
         seq_len = x.size(1)
         causal_mask = torch.triu(
-        torch.ones(seq_len, seq_len, device=x.device) * float('-inf'), 
-        diagonal=1
-    )
+            torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
+            diagonal=1
+        )
         
         transformer_output = self.transformer(transformer_input, src_key_padding_mask=src_attention_mask, mask=causal_mask)
         transformer_output = self.dropout(transformer_output)
         logits = self.fc(transformer_output) 
 
         return logits
-    def generate(self, prompt, max_length=128, temperature=0.8, topk=50):
+    def generate(self, prompt, max_length=128, temperature=0.8, topk=50, repetition_penalty=1.2):
         """
     :param prompt: Input string to start generation
     :param max_length: Maximum length of generated sequence
@@ -70,18 +68,18 @@ class NextWordPredictor(nn.Module):
     :param topk: Number of top tokens to consider (0 = disabled)
     :return: Generated text
     """
-        print(f"Generating with prompt: '{prompt}'")
-    
+        if(topk==0):
+            topk = len(self.vocabulary)
         sequence = self.vocabulary.text_to_sequence(prompt)
-        print(f"Sequence: {sequence}")
+
     
         context = [self.vocabulary.bos_index] + sequence
-        print(f"Context with BOS: {context}")
-    
+
         generated_tokens = []
     
         self.eval()
         with torch.no_grad():
+            model_device = next(self.parameters()).device
             for step in range(max_length):
                 # Handle context window
                 if len(context) > self.sequence_length:
@@ -89,18 +87,22 @@ class NextWordPredictor(nn.Module):
                 else:
                     input_window = context       
             
-                print(f"Step {step}, input_window length: {len(input_window)}")
             
-                input_tensor = torch.tensor([input_window]).to(self.device)
-                attention_mask = torch.ones(1, len(input_window)).to(self.device)  
+                input_tensor = torch.tensor([input_window], device=model_device)
+                attention_mask = torch.ones(1, len(input_window), device=model_device)
                 logits = self.forward(input_tensor, attention_mask=attention_mask)
             
-                next_word_logits = logits[0, -1, :] / temperature  
+                next_word_logits = logits[0, -1, :] / temperature
+
+                # Penalize already generated tokens to reduce loops/repetitions.
+                if repetition_penalty > 1.0 and len(generated_tokens) > 0:
+                    repeated = torch.tensor(list(set(generated_tokens)), device=model_device)
+                    next_word_logits[repeated] = next_word_logits[repeated] / repetition_penalty
+
                 probs = torch.softmax(next_word_logits, dim=-1)
             
                 # Top-k filtering
                 k = min(topk, len(probs))
-                print(f"Top-k={k}")
                 values, indices = torch.topk(probs, k=k)
                 new_prob = torch.zeros_like(probs)
                 new_prob.scatter_(0, indices, values)
@@ -109,29 +111,28 @@ class NextWordPredictor(nn.Module):
                 new_prob[self.vocabulary.pad_index] = 0
                 new_prob[self.vocabulary.bos_index] = 0
                 new_prob[self.vocabulary.unk_index] = 0
-            
-                # Check if all probabilities are zero
-                if new_prob.sum() == 0:
-                    print("⚠️ All probabilities are zero! Cannot sample.")
-                    break
-            
-                new_prob = new_prob / new_prob.sum()
+                if(new_prob.sum() == 0):
+                    probs[self.vocabulary.bos_index] = 0
+                    probs[self.vocabulary.unk_index] = 0
+                    probs[self.vocabulary.pad_index] = 0
+                    probs = probs / probs.sum()
+                    new_prob=probs
+                else:
+                    new_prob = new_prob / new_prob.sum()
             
                 next_word_index = torch.multinomial(new_prob, 1).item()
-                print(f"Generated token index: {next_word_index}")
             
-                if next_word_index == self.vocabulary.eos_index and len(generated_tokens) > 10:
-                    break  
-                if next_word_index == self.vocabulary.eos_index and len(generated_tokens) <= 10:
-                    continue
-            
+                if next_word_index == self.vocabulary.eos_index:
+                    if len(generated_tokens) >= 20:  # Ensure at least 20 tokens are generated before allowing EOS
+                        break
+                    else:
+                        continue  # Retry if EOS is generated 
+
                 context.append(next_word_index)
                 generated_tokens.append(next_word_index)
             
                 # Print partial result
                 partial = self.vocabulary.sequence_to_text(generated_tokens)
-                print(f"  → {partial}")
     
         final_text = prompt + " " + self.vocabulary.sequence_to_text(generated_tokens)
-        print(f"Final: '{final_text}'")
         return final_text
